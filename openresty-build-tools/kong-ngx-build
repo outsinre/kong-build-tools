@@ -15,6 +15,7 @@ FORCE=0
 OPENRESTY_PATCHES=$OPENRESTY_PATCHES
 KONG_NGINX_MODULE=master
 RESTY_LMDB=0 # disable by default for now
+RESTY_EVENT=0 # disable by default for now
 DEBUG=0
 NPROC=
 OS=
@@ -363,6 +364,25 @@ main() {
         popd
       popd
     fi
+
+    # lua-resty-worker-pubsub
+    if [ $RESTY_EVENT != 0 ]; then
+      if [[ $RESTY_EVENT == "master" ]]; then
+        RESTY_EVENT="origin/main"
+      fi
+      pushd $DOWNLOAD_CACHE
+        if [ ! -d lua-resty-worker-pubsub ]; then
+          warn "lua-resty-worker-pubsub source not found, cloning..."
+          git clone https://github.com/Kong/lua-resty-worker-pubsub --recursive
+        fi
+
+        pushd lua-resty-worker-pubsub
+          git fetch
+          # Accept both tags, branches and SHAs
+          git reset --hard $RESTY_EVENT || git reset --hard origin/$RESTY_EVENT
+        popd
+      popd
+    fi
   popd
 
   if [ ! -z "$DOWNLOAD_ONLY" ]; then
@@ -574,6 +594,10 @@ main() {
           OPENRESTY_OPTS+=("--add-module=$DOWNLOAD_CACHE/lua-resty-lmdb")
         fi
 
+        if [ $RESTY_EVENT != 0 ]; then
+          OPENRESTY_OPTS+=("--add-module=$DOWNLOAD_CACHE/lua-resty-worker-pubsub")
+        fi
+
         if version_gte $NGINX_CORE_VER 1.11.4; then
           OPENRESTY_OPTS+=('--with-stream_realip_module')
         fi
@@ -635,6 +659,13 @@ main() {
       if [ $RESTY_LMDB != 0 ]; then
         pushd $DOWNLOAD_CACHE/lua-resty-lmdb
           warn "installing library files for lua-resty-lmdb..."
+          make install LUA_LIB_DIR=$OPENRESTY_INSTALL/lualib
+        popd
+      fi
+
+      if [ $RESTY_EVENT != 0 ]; then
+        pushd $DOWNLOAD_CACHE/lua-resty-worker-pubsub
+          warn "installing library files for lua-resty-worker-pubsub..."
           make install LUA_LIB_DIR=$OPENRESTY_INSTALL/lualib
         popd
       fi
